@@ -1,0 +1,299 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Mini Wordle 💌</title>
+<style>
+  body {
+    font-family: Arial, sans-serif;
+    background: linear-gradient(135deg, #ff9a9e, #fad0c4);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    height: 100vh;
+    margin: 0;
+  }
+
+  .game-container {
+    text-align: center;
+    background: white;
+    padding: 25px;
+    border-radius: 15px;
+    box-shadow: 0 10px 25px rgba(0,0,0,0.15);
+    width: 380px;
+  }
+
+  .row {
+    display: flex;
+    justify-content: center;
+    gap: 5px;
+    margin-bottom: 5px;
+  }
+
+  .tile {
+    width: 45px;
+    height: 45px;
+    border: 2px solid #ccc;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    font-size: 16px;
+    font-weight: bold;
+    text-transform: uppercase;
+  }
+
+  .correct { background-color: #6aaa64; color: white; border: none; }
+  .present { background-color: #c9b458; color: white; border: none; }
+  .wrong { background-color: #787c7e; color: white; border: none; }
+  .reveal { background-color: #ff6f91; color: white; border: none; }
+
+  input {
+    padding: 8px;
+    font-size: 16px;
+    text-transform: uppercase;
+    width: 140px;
+    text-align: center;
+  }
+
+  button {
+    padding: 8px 12px;
+    margin: 6px 3px;
+    background-color: #ff6f91;
+    border: none;
+    color: white;
+    border-radius: 5px;
+    cursor: pointer;
+  }
+
+  .hidden { display: none; }
+  .message { margin-top: 15px; font-size: 18px; }
+  .clue { font-size: 14px; color: #555; margin-top: 8px; min-height: 20px; }
+
+  /* Letter Overlay */
+.letter-overlay {
+  position: fixed;
+  inset: 0;
+  background: linear-gradient(135deg, #fdfbfb, #ebedee);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 999;
+  animation: fadeIn 1.2s ease forwards;
+}
+
+.letter {
+  background: #fffaf3;
+  padding: 40px 35px;
+  max-width: 600px;
+  width: 90%;
+  border-radius: 12px;
+  box-shadow: 0 20px 40px rgba(0,0,0,0.15);
+  font-family: "Georgia", serif;
+  line-height: 1.7;
+  animation: slideUp 1.2s ease forwards;
+}
+
+.letter h1 {
+  text-align: center;
+  font-family: "Brush Script MT", cursive;
+  font-size: 42px;
+  margin-bottom: 25px;
+  color: #ff6f91;
+}
+
+.letter .signature {
+  margin-top: 35px;
+  font-family: "Brush Script MT", cursive;
+  font-size: 28px;
+  text-align: right;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes slideUp {
+  from { transform: translateY(40px); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}
+</style>
+</head>
+<body>
+
+<div class="game-container">
+  <h2>Mini Wordle 💌</h2>
+  <p id="instruction">Guess the secret word…</p>
+
+  <div id="board"></div>
+
+  <input type="text" id="guessInput" maxlength="5" />
+  <br>
+  <button onclick="submitGuess()">Guess</button>
+
+  <div id="endOptions" class="hidden">
+    <p>Out of tries...</p>
+    <button onclick="resetGame()">Try Again</button>
+    <button onclick="giveUp()">Give Up</button>
+  </div>
+
+  <div class="message" id="finalMessage"></div>
+  <div class="clue" id="clueText"></div>
+</div>
+
+<script>
+  const secretWord = "CONJK";
+  const phraseRows = ["WILL", "YOU", "BE", "MY", "VALENTINE?"];
+  const maxAttempts = 5;
+  let attempts = 0;
+  let proposalMode = false;
+  let clueIndex = 0;
+
+  const funnyClues = [
+    "Hmm… starts with Y 👀",
+    "Uhmmm Oo in tagalog",
+    "Try a more positive answer, love",
+    "Rhymes with ‘yes’",
+    "Opposite of NO… just saying...🙄",
+    "3 letters lang tologo,,...,",
+    "Please rose I need this",
+    "Hint: Y E S",
+    "Hint: yung gusto kong sagot 🥺",
+    "Hindi NO, just go with the flow 😔",
+    "Hayszz ako nalang kaya sumagot 🙄"
+  ];
+
+  const board = document.getElementById("board");
+  const endOptions = document.getElementById("endOptions");
+  const finalMessage = document.getElementById("finalMessage");
+  const clueText = document.getElementById("clueText");
+  const input = document.getElementById("guessInput");
+  const instruction = document.getElementById("instruction");
+
+  function createGuessRow(guess) {
+    const row = document.createElement("div");
+    row.classList.add("row");
+
+    for (let i = 0; i < 5; i++) {
+      const tile = document.createElement("div");
+      tile.classList.add("tile");
+      tile.textContent = guess[i] || "";
+
+      if (guess[i] === secretWord[i]) tile.classList.add("correct");
+      else if (secretWord.includes(guess[i])) tile.classList.add("present");
+      else tile.classList.add("wrong");
+
+      row.appendChild(tile);
+    }
+
+    board.appendChild(row);
+  }
+
+  function submitGuess() {
+    const guess = input.value.toUpperCase();
+
+    if (proposalMode) {
+      if (guess === "YES") {
+        showFinalLetter();
+        input.disabled = true;
+      } else {
+        clueText.innerHTML = funnyClues[clueIndex % funnyClues.length];
+        clueIndex++;
+      }
+      input.value = "";
+      return;
+    }
+
+    if (guess.length !== 5 || attempts >= maxAttempts) return;
+
+    createGuessRow(guess);
+    attempts++;
+    input.value = "";
+
+    if (attempts === maxAttempts) {
+      endOptions.classList.remove("hidden");
+    }
+  }
+
+  function resetGame() {
+    attempts = 0;
+    proposalMode = false;
+    clueIndex = 0;
+    board.innerHTML = "";
+    finalMessage.innerHTML = "";
+    clueText.innerHTML = "";
+    endOptions.classList.add("hidden");
+    input.disabled = false;
+    instruction.innerHTML = "Guess the secret word…";
+  }
+
+  function giveUp() {
+    board.innerHTML = "";
+
+    phraseRows.forEach(word => {
+      const row = document.createElement("div");
+      row.classList.add("row");
+
+      for (let i = 0; i < word.length; i++) {
+        const tile = document.createElement("div");
+        tile.classList.add("tile", "reveal");
+        tile.textContent = word[i];
+        row.appendChild(tile);
+      }
+
+      board.appendChild(row);
+    });
+
+    
+    instruction.innerHTML = "Type your answer to continue…";
+    clueText.innerHTML = "Hint: The correct answer has 3 letters :3";
+    proposalMode = true;
+    endOptions.classList.add("hidden");
+  }
+
+function showFinalLetter() {
+  document.body.innerHTML = `
+    <div class="letter-overlay">
+      <div class="letter">
+        <h1>My Valentine</h1>
+
+        <p>
+          Hello loml Generose Benitez!
+        </p>
+
+        <p>
+          I wanted to ask you in a way you’d never forget.
+        </p>
+
+        <p>
+          Lately might have been a bit of a rough road for us, but through it all, 
+          my feelings for you have only grown stronger. You make my days brighter, 
+          my laughs louder, and my heart so much happier. I want to carry every moment
+          we've shared with me forever.
+        </p>
+
+        <p>
+          I feel incredibly lucky to have you in my life, and I want us to
+          look forward with more positivity. I can't wait to create even more
+          beautiful memories together. :3
+        </p>
+
+        <p>
+          🌹 <strong>Save the Date:</strong> February 14, 2026 🌹  
+          <br>
+          I can’t wait to spend it with you.
+        </p>
+
+        <div class="signature">
+          Always yours,<br>
+          Ray :P
+        </div>
+      </div>
+    </div>
+  `;
+}
+</script>
+
+</body>
+</html>
